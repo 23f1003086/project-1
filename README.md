@@ -63,7 +63,7 @@ curl -X POST https://your-space-name.hf.space/api-endpoint \
 -H "Content-Type: application/json" \
 -d '{
   "email": "student@example.com",
-  "secret": "my-college-secret",
+  "secret": "hiddensecret",
   "task": "captcha-solver-001",
   "round": 1,
   "nonce": "abcd-1234",
@@ -84,7 +84,7 @@ curl -X POST https://your-space-name.hf.space/api-endpoint \
 -H "Content-Type: application/json" \
 -d '{
   "email": "student@example.com",
-  "secret": "my-college-secret",
+  "secret": "hiddensecret",
   "task": "captcha-solver-001",
   "round": 2,
   "nonce": "efgh-5678",
@@ -104,6 +104,7 @@ curl -X POST https://your-space-name.hf.space/api-endpoint \
 | File                   | Description                                                                |
 | ---------------------- | -------------------------------------------------------------------------- |
 | `app.py`               | Flask API handling requests, secret verification, GitHub integration, etc. |
+| `apt.txt`              |                                                              |
 | `requirements.txt`     | Python dependencies (Flask, requests, PyGithub, python-dotenv)             |
 | `Dockerfile`           | Optional: Deploy app on Hugging Face Spaces using Docker                   |
 | `README.md`            | This file                                                                  |
@@ -119,6 +120,7 @@ llm_deploy_project_23f1003086/
 │
 ├── app.py
 ├── requirements.txt
+├── apt.txt
 ├── Dockerfile
 ├── LICENSE
 ├── README.md
