@@ -2,3 +2,10 @@ flask
 requests
 pygithub
 python-dotenv
+openai>=1.0.0
+Pillow
+pytesseract
+flask-cors
+fastapi
+uvicorn[standard]
+python-multipart==0.0.6
