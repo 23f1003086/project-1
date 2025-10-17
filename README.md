@@ -67,7 +67,7 @@ The application expects a JSON POST request with the following fields:
 
 ### Round 1
 ```bash
-curl -X POST https://your-space-name.hf.space/api-endpoint \
+curl -X POST https://space-name.hf.space/api-endpoint \
 -H "Content-Type: application/json" \
 -d '{
   "email": "student@example.com",
@@ -88,7 +88,7 @@ curl -X POST https://your-space-name.hf.space/api-endpoint \
 
 ### Round 2
 ```bash
-curl -X POST https://your-space-name.hf.space/api-endpoint \
+curl -X POST https://space-name.hf.space/api-endpoint \
 -H "Content-Type: application/json" \
 -d '{
   "email": "student@example.com",
