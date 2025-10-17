@@ -32,7 +32,7 @@ pip install -r requirements.txt
 
 ### 3. Run the FastAPI App
 ```bash
-uvicorn app:app --reload
+uvicorn app:app --reload --port 7860
 
 ```
 
@@ -134,8 +134,7 @@ llm_deploy_project_23f1003086/
 ├── Dockerfile
 ├── LICENSE
 ├── README.md
-└── templates/
-    └── index.html
+
 ```
 
 ---
