@@ -67,11 +67,11 @@ The application expects a JSON POST request with the following fields:
 
 ### Round 1
 ```bash
-curl -X POST https://space-name.hf.space/api-endpoint \
+curl -X POST https://s23f1003086-llm-project-23f1003086.hf.space/api-endpoint \
 -H "Content-Type: application/json" \
 -d '{
   "email": "student@example.com",
-  "secret": "hiddensecret",
+  "secret": "fakesecret",
   "task": "captcha-solver-001",
   "round": 1,
   "nonce": "abcd-1234",
@@ -80,6 +80,7 @@ curl -X POST https://space-name.hf.space/api-endpoint \
     "Repo has MIT license",
     "Page displays solved captcha"
   ],
+  "evaluation_url": "https://evaluator.example.com/notify",
   "attachments": [
     {"name": "sample.png", "url": "data:image/png;base64,..."}
   ]
@@ -88,11 +89,11 @@ curl -X POST https://space-name.hf.space/api-endpoint \
 
 ### Round 2
 ```bash
-curl -X POST https://space-name.hf.space/api-endpoint \
+curl -X POST https://s23f1003086-llm-project-23f1003086.hf.space/api-endpoint \
 -H "Content-Type: application/json" \
 -d '{
   "email": "student@example.com",
-  "secret": "hiddensecret",
+  "secret": "fakesecret",
   "task": "captcha-solver-001",
   "round": 2,
   "nonce": "efgh-5678",
@@ -101,6 +102,7 @@ curl -X POST https://space-name.hf.space/api-endpoint \
     "Repo has MIT license",
     "Page displays solved captcha including SVG"
   ],
+  "evaluation_url": "https://evaluator.example.com/notify",
   "attachments": []
 }'
 ```
