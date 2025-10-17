@@ -37,7 +37,7 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 
 import openai
 
-# Set your API key and base URL
+# Set  API key and base URL
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 openai.api_base = os.environ.get("OPENAI_BASE_URL", "https://aipipe.org/openai/v1")
 
