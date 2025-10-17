@@ -1,6 +1,13 @@
 # LLM Deploy Project
 
-This Flask-based application automates the deployment and evaluation of student submissions via Hugging Face Spaces. It supports task verification, GitHub integration, and dynamic app generation based on JSON POST requests.
+This FastAPI-based application automates the generation, deployment, and evaluation of web applications based on JSON task briefs. It handles:
+
+- Receiving and verifying task requests with secrets
+- Dynamic app generation using LLM-assisted code
+- GitHub repository creation, updates, and MIT license enforcement
+- GitHub Pages deployment and validation (200 OK)
+- Posting task metadata to an evaluation server
+- Handling multiple rounds of updates/refactoring based on new task briefs
 
 ---
 
@@ -23,9 +30,10 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Run the Flask App
+### 3. Run the FastAPI App
 ```bash
-python app.py
+uvicorn app:app --reload
+
 ```
 
 ---
@@ -104,12 +112,12 @@ curl -X POST https://your-space-name.hf.space/api-endpoint \
 | File                   | Description                                                                |
 | ---------------------- | -------------------------------------------------------------------------- |
 | `app.py`               | Flask API handling requests, secret verification, GitHub integration, etc. |
-| `apt.txt`              |                                                              |
-| `requirements.txt`     | Python dependencies (Flask, requests, PyGithub, python-dotenv)             |
+| `apt.txt`              |                                                                            |
+| `requirements.txt`     | all dependencies                                                           |
 | `Dockerfile`           | Optional: Deploy app on Hugging Face Spaces using Docker                   |
 | `README.md`            | This file                                                                  |
 | `LICENSE`              | MIT License                                                                |
-| `templates/index.html` | Basic HTML template for the deployed app                                   |
+
 
 ---
 
