@@ -114,7 +114,7 @@ curl -X POST https://s23f1003086-llm-project-23f1003086.hf.space/api-endpoint \
 | File                   | Description                                                                |
 | ---------------------- | -------------------------------------------------------------------------- |
 | `app.py`               | Fast API handling requests, secret verification, GitHub integration, etc. |
-| `apt.txt`              |                                                                            |
+| `apt.txt`              | System dependencies for Hugging Face deployment                                                                           |
 | `requirements.txt`     | all dependencies                                                           |
 | `Dockerfile`           | Optional: Deploy app on Hugging Face Spaces using Docker                   |
 | `README.md`            | This file                                                                  |
