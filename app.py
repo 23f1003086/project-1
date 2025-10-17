@@ -1,4 +1,3 @@
-
 import os, datetime, subprocess, base64, json
 from github import Github
 from PIL import Image, ImageEnhance 
@@ -7,40 +6,20 @@ import time
 from fastapi import UploadFile, File   
 import requests
 import uvicorn 
+import os
+import base64
+import requests
+import traceback
 # --- FastAPI Imports ---
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 # from pydantic import BaseModel 
 
-def should_use_vision_api(brief, attachments):
-    """
-    Use vision API for ANY task that needs to understand image content
-    """
-    brief_lower = brief.lower()
-    
-    # Check if we have images
-    has_images = any(
-        att.get('name', '').endswith(('.png', '.jpg', '.jpeg', '.gif'))
-        for att in attachments
-    )
-    
-    if not has_images:
-        return False
-    
-    # Vision API tasks: text extraction + image understanding
-    vision_keywords = [
-        # Text extraction
-        'captcha', 'read', 'extract text', 'ocr', 'text recognition',
-        # Image understanding  
-        'what\'s in', 'describe image', 'identify', 'what is this',
-        'explain image', 'analyze image', 'recognize image', 'what does this show'
-    ]
-    
-    return any(keyword in brief_lower for keyword in vision_keywords)
+
 # --- FastAPI App Initialization ---
 app = FastAPI()
 
-# Add CORS middleware  
+# Add CORS middleware (Good practice for any API)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -58,7 +37,7 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 
 import openai
 
-# Set your API key and base URL
+# Set  API key and base URL
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 openai.api_base = os.environ.get("OPENAI_BASE_URL", "https://aipipe.org/openai/v1")
 
@@ -70,7 +49,65 @@ with open("LICENSE", "r") as f:
 README_TEMPLATE = """# {APP_NAME}
 This repository was automatically generated for task **{TASK_NAME}**.
 """
+def decode_attachments(attachments, app_folder):
+    """
+    Decode and save attachments to app_folder.
+    Returns list of saved attachment info with name, path, type, size.
+    """
+    os.makedirs(app_folder, exist_ok=True)
+    saved = []
 
+    for att in attachments:
+        filename = att.get("name") or att.get("filename")
+        content = att.get("url") or att.get("content")
+        if not filename or not content:
+            continue
+
+        file_path = os.path.join(app_folder, filename)
+        try:
+            # --- Base64 ---
+            if content.startswith("data:") and "base64," in content:
+                base64_data = content.split("base64,")[1]
+                base64_data = base64_data.replace('\n', '').replace('\r', '')
+                # Auto decide text vs binary
+                if filename.endswith((".md", ".txt", ".csv", ".json")):
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(base64.b64decode(base64_data).decode("utf-8"))
+                else:
+                    with open(file_path, "wb") as f:
+                        f.write(base64.b64decode(base64_data))
+                saved.append({"name": filename, "path": file_path, "type": "base64"})
+
+            # --- URL ---
+            elif content.startswith("http://") or content.startswith("https://"):
+                r = requests.get(content, timeout=10)
+                r.raise_for_status()
+                with open(file_path, "wb") as f:
+                    f.write(r.content)
+                saved.append({"name": filename, "path": file_path, "type": "url"})
+
+            else:
+                print(f"[WARN] Unknown attachment format for {filename}")
+
+        except Exception as e:
+            print(f"❌ Failed to save {filename}: {e}")
+            traceback.print_exc()
+    
+    return saved
+
+def summarize_attachment_meta(saved_attachments):
+    """
+    Returns a summary string of saved attachments for the LLM context
+    """
+    if not saved_attachments:
+        return "No attachments available."
+    
+    lines = []
+    for att in saved_attachments:
+        size = os.path.getsize(att["path"])
+        lines.append(f"- {att['name']} ({att['type']}, {size} bytes)")
+    
+    return "\n".join(lines)
 from io import BytesIO
 import requests
 import pytesseract
@@ -82,37 +119,6 @@ import pytesseract
 import base64
 import os
 
-def save_attachments(app_folder, attachments):
-    for att in attachments:
-        filename = att.get("name") or att.get("filename")  # e.g., "sample.png"
-        content = att.get("url") or att.get("content")     # could be base64 or direct URL
-        if not filename or not content:
-            continue
-
-        file_path = os.path.join(app_folder, filename)
-
-        try:
-            if content.startswith("data:"):  # base64 data
-                # Split at the comma to separate the prefix from actual base64
-                base64_data = content.split(",")[1]  
-                base64_data = base64_data.replace('\n', '').replace('\r', '')
-                with open(file_path, "wb") as f:
-                    f.write(base64.b64decode(base64_data))
-                print(f"Saved base64 attachment: {filename}")
-
-            elif content.startswith("http://") or content.startswith("https://"):  # direct URL
-                import requests
-                r = requests.get(content, timeout=10)
-                r.raise_for_status()
-                with open(file_path, "wb") as f:
-                    f.write(r.content)
-                print(f"Downloaded attachment from URL: {filename}")
-
-            else:
-                print(f"[WARN] Unknown attachment format for {filename}")
-
-        except Exception as e:
-            print(f"Failed to save {filename}: {e}")
 
 
 
@@ -120,8 +126,7 @@ def save_attachments(app_folder, attachments):
 def create_or_update_repo(app_folder, task_name, round_number, brief):
     """
     Create or update a GitHub repo for the task.
-    Pushes HTML files and images correctly (images as Base64).
-    Enables GitHub Pages.
+    Pushes ALL files including attachments.
     """
     from github import Github, Auth
     import base64
@@ -147,7 +152,7 @@ def create_or_update_repo(app_folder, task_name, round_number, brief):
             is_new_repo = True
             print(f"✅ Created new repo: {repo.full_name}")
 
-        # Files to push
+        # 🆕 PUSH ALL FILES IN THE APP FOLDER
         files_to_push = []
 
         # Push index.html
@@ -158,38 +163,48 @@ def create_or_update_repo(app_folder, task_name, round_number, brief):
             files_to_push.append({"path": "index.html", "content": html_content})
             print("✅ Added index.html to push list")
 
-        # Push images correctly
-        image_files = ["sample.png", "image.png", "captcha.png"]
-        for img_file in image_files:
-            img_path = os.path.join(app_folder, img_file)
-            if os.path.exists(img_path):
-                with open(img_path, "rb") as f:
-                    image_bytes = f.read()
-                image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+        # 🆕 PUSH ALL ATTACHMENT FILES (markdown, csv, json, etc.)
+        for filename in os.listdir(app_folder):
+            if filename != "index.html":  # Skip index.html since we already handle it
+                file_path = os.path.join(app_folder, filename)
+                if os.path.isfile(file_path):
+                    try:
+                        # Read file content based on file type
+                        if filename.endswith(('.md', '.txt', '.csv', '.json', '.js', '.css', '.html')):
+                            # Text files
+                            with open(file_path, "r", encoding="utf-8") as f:
+                                file_content = f.read()
+                            files_to_push.append({"path": filename, "content": file_content})
+                            print(f"✅ Added text file: {filename}")
+                        else:
+                            # Binary files (images, etc.)
+                            with open(file_path, "rb") as f:
+                                file_bytes = f.read()
+                            file_b64 = base64.b64encode(file_bytes).decode('utf-8')
+                            
+                            # Use GitHub API for binary files
+                            try:
+                                existing_file = repo.get_contents(filename)
+                                sha = existing_file.sha
+                            except:
+                                sha = None
 
-                # Check if file exists
-                try:
-                    existing_file = repo.get_contents(img_file)
-                    sha = existing_file.sha
-                except:
-                    sha = None  # File doesn't exist → will create
+                            data = {
+                                "message": f"Round {round_number} - Add/Update {filename}",
+                                "content": file_b64,
+                                "branch": "main"
+                            }
+                            if sha:
+                                data["sha"] = sha
 
-                # Use GitHub contents API to push
-                data = {
-                    "message": f"Round {round_number} - Add/Update {img_file}",
-                    "content": image_b64,
-                    "branch": "main"
-                }
-                if sha:
-                    data["sha"] = sha
-
-                repo._requester.requestJson(
-                    "PUT",
-                    f"/repos/{repo.owner.login}/{repo.name}/contents/{img_file}",
-                    input=data
-                )
-                print(f"✅ Added/updated image file: {img_file}")
-                
+                            repo._requester.requestJson(
+                                "PUT",
+                                f"/repos/{repo.owner.login}/{repo.name}/contents/{filename}",
+                                input=data
+                            )
+                            print(f"✅ Added/updated binary file: {filename}")
+                    except Exception as e:
+                        print(f"⚠️ Failed to process {filename}: {e}")
 
         # Generate README content
         repo_url = f"https://github.com/{user.login}/{task_name}"
@@ -201,7 +216,7 @@ def create_or_update_repo(app_folder, task_name, round_number, brief):
         files_to_push.append({"path": "LICENSE", "content": LICENSE_TEMPLATE})
         print("✅ Added LICENSE content")
 
-        # Push text files (HTML, README, LICENSE)
+        # Push all text files
         commit_sha = None
         for file_info in files_to_push:
             file_path = file_info["path"]
@@ -391,7 +406,7 @@ This project was automatically generated based on the following requirement:
 
 
 
-def generate_code_from_brief(brief, attachments=None, previous_code=None, checks=None, seed=None, vision_result="no_vision_needed"):
+def generate_code_from_brief(brief, attachments=None, previous_code=None, checks=None, seed=None):
     """
     Generates HTML+JS for ANY task - completely generic
     """
@@ -430,7 +445,56 @@ CRITICAL REQUIREMENTS:
 4. IMPLEMENT ACTUAL FUNCTIONALITY - do not hardcode results
 5. If task involves processing/analysis, implement real algorithms
 6. Include appropriate error handling
+🚨 **API CORRECT USAGE:**
+- GitHub API tokens: Use Authorization header, NOT URL parameters
+- CORRECT: headers = {{'Authorization': 'token YOUR_TOKEN'}}
+- WRONG: ?token=xxx in URL
+- Bootstrap: Include BOTH CSS and JS CDNs
+🚨 **VALIDATION CHECK:**
+Before outputting, verify:
+1. All task-specific requirements are implemented exactly
+2. API authentication is correct (headers vs URL)
+3. Element IDs match task requirements
+4. Code would actually work when deployed
+🚨 **AUTOMATIC ATTACHMENT PROCESSING (MANDATORY):**
+- If attachments are provided, the page MUST automatically process and display them ON PAGE LOAD
+- NO user interaction should be required for the initial display
+- The attached file content should be visible immediately when the page loads
+- Show "Processing..." message while working
+- Display results in the main output area automatically
+- AFTER automatic processing, provide interface for users to upload their own files
+🚨 **CRITICAL: LOAD FILES FROM SAME DIRECTORY**
+- All attachment files are available in the SAME DIRECTORY as the HTML file
+- Use relative paths to load files: fetch('filename.ext')
+- For markdown: fetch('input.md')
+- For images: use <img src="image.png"> or fetch('image.png')
+- For data files: fetch('data.csv') or fetch('data.json')
+- The files are hosted on GitHub Pages in the same repository
+🚨 **CRITICAL: MARKED.JS V4+ SYNTAX**
+- You MUST use `marked.parse(markdownText)` 
+- NEVER use `marked(markdownText)` - this is OLD syntax and will cause "marked is not a function" error
+- Example of CORRECT usage: `const html = marked.parse(markdownText);`
+- Example of WRONG usage: `const html = marked(markdownText);`
+🚨 **CRITICAL: CORRECT CDN URLs (MUST USE THESE EXACTLY):**
+**FOR MARKED.JS:**
+- <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+**FOR HIGHLIGHT.JS:**
+- <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
+**FOR BOOTSTRAP 5:**
+- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+**FOR TESSERACT.JS:**
+- <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
+🚨 **NEVER USE THESE WRONG URLs:**
+- ❌ https://cdn.jsdelivr.net/npm/highlight.js/lib/highlight.js
+- ❌ https://cdn.jsdelivr.net/npm/highlight.js@11.5.1/lib/highlight.js
+- ❌ Any other variation - USE THE EXACT URLs ABOVE
 SPECIFIC INSTRUCTIONS:
+- If the task requires any JavaScript library (e.g., Markdown parsing, charts, OCR):
+  • Automatically include a browser-ready CDN for the library.
+  • Always use the library's recommended, current API (do not guess old versions).
+  • Ensure the code works directly in a browser as a single HTML file.
 - If the task involves image processing, OCR, captcha solving, or text recognition:
   • Use the Tesseract.js library.
   • ALWAYS include this line before </body> or in <head>:
@@ -509,18 +573,11 @@ def process_submission_and_notify(data: dict, task_name: str, round_number: int)
     # --- SETUP AND ATTACHMENTS ---
     os.makedirs(task_name, exist_ok=True)
     attachments = data.get("attachments", [])
-    save_attachments(task_name, attachments)
+    saved_attachments = decode_attachments(attachments, task_name)
+    # Optionally, get a summary for LLM context
+    attach_summary = summarize_attachment_meta(saved_attachments)
 
-    # 🆕 GENERIC TASK PROCESSING - no CAPTCHA-specific logic
-    vision_result = "no_vision_needed"
     
-    # Only use vision if explicitly needed
-    if should_use_vision_api(data.get("brief", ""), attachments):
-        print("🔍 Task requires vision analysis")
-        # You can keep your vision logic here if needed
-        # but make it optional, not required
-    else:
-        print(f"✅ Generic task processing")
 
     # CODE GENERATION (uses generic function above)
     index_file = f"{task_name}/index.html"
@@ -536,7 +593,7 @@ def process_submission_and_notify(data: dict, task_name: str, round_number: int)
             previous_code,
             data.get("checks", []),
             data.get("seed"),
-            vision_result
+            
         )
     except Exception as e:
         generated_html = f"<p>Failed to generate code: {e}</p>"
@@ -615,7 +672,7 @@ async def api_endpoint(request: Request, background_tasks: BackgroundTasks):
     round_number = data.get("round")
     
     # 🆕 ADD THIS: Create GitHub Pages URL immediately
-    github_username = "23f1003086"  # Your GitHub username
+    github_username = "23f1003086"  # GitHub username
     pages_url = f"https://{github_username}.github.io/{task_name}/"
     repo_url = f"https://github.com/{github_username}/{task_name}"
     
@@ -634,8 +691,8 @@ async def api_endpoint(request: Request, background_tasks: BackgroundTasks):
         "status": "accepted",
         "task": task_name,
         "round": round_number,
-        "pages_url": pages_url,  
-        "repo_url": repo_url,    
+        "pages_url": pages_url,  # 🆕 ADD THIS
+        "repo_url": repo_url,    # 🆕 ADD THIS
         "message": f"Processing started in background. Your app will be available at: {pages_url}"
     }
         
