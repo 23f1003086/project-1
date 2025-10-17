@@ -37,7 +37,7 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 
 import openai
 
-# Set  API key and base URL
+# Set your API key and base URL
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 openai.api_base = os.environ.get("OPENAI_BASE_URL", "https://aipipe.org/openai/v1")
 
@@ -672,7 +672,7 @@ async def api_endpoint(request: Request, background_tasks: BackgroundTasks):
     round_number = data.get("round")
     
     # 🆕 ADD THIS: Create GitHub Pages URL immediately
-    github_username = "23f1003086"  # GitHub username
+    github_username = "23f1003086"  # Your GitHub username
     pages_url = f"https://{github_username}.github.io/{task_name}/"
     repo_url = f"https://github.com/{github_username}/{task_name}"
     
